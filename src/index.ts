@@ -31,9 +31,8 @@ async function checkTicketAvailability(): Promise<void> {
 
     const $ = cheerio.load(response.data);
     const noTicketElement = $(".sl_ticketArchiveList--empty");
-    const errorElement = $(".error_txt.txt_lead");
 
-    if (!noTicketElement.length && !errorElement.length) {
+    if (!noTicketElement.length) {
       // チケットが見つかった場合
       await client.pushMessage(LINE_USER_ID, {
         type: "text",
@@ -43,14 +42,15 @@ async function checkTicketAvailability(): Promise<void> {
       console.log("チケットが見つかりました！通知を送信しました。");
     } else {
       const currentTime = new Date().toLocaleString("ja-JP");
-      if (errorElement.length) {
-        console.log(`[${currentTime}] アクセスが集中しています`);
-      } else {
-        console.log(`[${currentTime}] チケットはまだありません`);
-      }
+      console.log(`[${currentTime}] チケットはまだありません`);
     }
   } catch (error) {
-    console.error("エラーが発生しました:", error);
+    if (axios.isAxiosError(error) && error.response?.status === 429) {
+      const currentTime = new Date().toLocaleString("ja-JP");
+      console.log(`[${currentTime}] アクセスが集中しています`);
+    } else {
+      console.error("エラーが発生しました:", error);
+    }
   }
 }
 
