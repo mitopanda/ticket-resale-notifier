@@ -37,7 +37,8 @@ async function checkTicketAvailability(): Promise<void> {
       // チケットが見つかった場合
       await client.pushMessage(LINE_USER_ID, {
         type: "text",
-        text: `🎫 チケットが見つかりました！\n確認URL: ${URL}`,
+        text: `🎫 チケットが見つかりました！\nPlus Member ID: ${process.env
+          .PLUS_MEMBER_ID!}\n確認URL: ${URL}`,
       });
       console.log("チケットが見つかりました！通知を送信しました。");
     } else {
