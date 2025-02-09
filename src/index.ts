@@ -7,7 +7,7 @@ dotenv.config();
 
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
-const LINE_USER_ID = process.env.LINE_USER_ID!;
+const LINE_USER_ID = process.env.LINE_USER_ID;
 
 if (!LINE_CHANNEL_ACCESS_TOKEN || !LINE_CHANNEL_SECRET || !LINE_USER_ID) {
   throw new Error("環境変数を確認してください。");
@@ -17,10 +17,15 @@ const client = new Client({
   channelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: LINE_CHANNEL_SECRET,
 });
-const URL = process.env.TICKET_PIA_URL!;
-const INTERVAL = 30000;
+const INTERVAL = 5000;
+const URL = process.env.TICKET_PIA_URL;
+const PLUS_MEMBER_ID = process.env.PLUS_MEMBER_ID;
 
 async function checkTicketAvailability(): Promise<void> {
+  if (!URL) {
+    console.error("URLが設定されていません。");
+    return;
+  }
   try {
     const response = await axios.get(URL, {
       headers: {
@@ -33,11 +38,23 @@ async function checkTicketAvailability(): Promise<void> {
     const noTicketElement = $(".sl_ticketArchiveList--empty");
 
     if (!noTicketElement.length) {
+      if (!LINE_USER_ID) {
+        console.error("LINE_USER_IDが設定されていません。");
+        return;
+      }
       // チケットが見つかった場合
       await client.pushMessage(LINE_USER_ID, {
         type: "text",
-        text: `🎫 チケットが見つかりました！\nPlus Member ID: ${process.env
-          .PLUS_MEMBER_ID!}\n確認URL: ${URL}`,
+        text: `🎫 チケットが見つかりました！\n
+          確認URL: ${URL}`,
+      });
+      if (!PLUS_MEMBER_ID) {
+        console.error("PLUS_MEMBER_IDが設定されていません。");
+        return;
+      }
+      await client.pushMessage(LINE_USER_ID, {
+        type: "text",
+        text: PLUS_MEMBER_ID,
       });
       console.log("チケットが見つかりました！通知を送信しました。");
     } else {
