@@ -17,7 +17,7 @@ const client = new Client({
   channelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: LINE_CHANNEL_SECRET,
 });
-const INTERVAL = 5000;
+const INTERVAL = 2500;
 const URL = process.env.TICKET_PIA_URL;
 const PLUS_MEMBER_ID = process.env.PLUS_MEMBER_ID;
 
@@ -36,6 +36,18 @@ async function checkTicketAvailability(): Promise<void> {
 
     const $ = cheerio.load(response.data);
     const noTicketElement = $(".sl_ticketArchiveList--empty");
+
+    // アクセス集中ページのチェック
+    const isAccessCongested =
+      $("strong.notice:contains('ただいまアクセスが集中し')").length > 0 ||
+      $("p:contains('アクセスが集中')").length > 0 ||
+      $(".notice2").length > 0;
+
+    if (isAccessCongested) {
+      const currentTime = new Date().toLocaleString("ja-JP");
+      console.log(`[${currentTime}] IPアドレスを変えよう`);
+      return;
+    }
 
     if (!noTicketElement.length) {
       if (!LINE_USER_ID) {
@@ -57,6 +69,11 @@ async function checkTicketAvailability(): Promise<void> {
         text: PLUS_MEMBER_ID,
       });
       console.log("チケットが見つかりました！通知を送信しました。");
+      // インターバルをクリアしてループを終了
+      if (intervalId) {
+        clearInterval(intervalId);
+        console.log("チケット監視を終了します。");
+      }
     } else {
       const currentTime = new Date().toLocaleString("ja-JP");
       console.log(`[${currentTime}] チケットはまだありません`);
@@ -72,5 +89,5 @@ async function checkTicketAvailability(): Promise<void> {
 }
 
 console.log("チケット監視を開始します...");
-setInterval(checkTicketAvailability, INTERVAL);
+const intervalId = setInterval(checkTicketAvailability, INTERVAL);
 checkTicketAvailability(); // 初回実行
