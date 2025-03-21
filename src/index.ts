@@ -1,26 +1,33 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import dotenv from "dotenv";
-import { Client } from "@line/bot-sdk";
 
 dotenv.config();
 
-const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
-const LINE_USER_ID = process.env.LINE_USER_ID!;
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-if (!LINE_CHANNEL_ACCESS_TOKEN || !LINE_CHANNEL_SECRET || !LINE_USER_ID) {
-  throw new Error("環境変数を確認してください。");
+// 環境変数のチェックを変更
+if (!DISCORD_WEBHOOK_URL) {
+  throw new Error("Discord Webhook URLを環境変数に設定してください。");
 }
 
-const client = new Client({
-  channelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: LINE_CHANNEL_SECRET,
-});
-const URL = process.env.TICKET_PIA_URL!;
-const INTERVAL = 30000;
+const INTERVAL = 2500;
+const URL = process.env.TICKET_PIA_URL;
+const PLUS_MEMBER_ID = process.env.PLUS_MEMBER_ID;
+
+// Discordにメッセージを送信する関数を追加
+async function sendDiscordMessage(message: string): Promise<void> {
+  if (!DISCORD_WEBHOOK_URL) return;
+  await axios.post(DISCORD_WEBHOOK_URL, {
+    content: message,
+  });
+}
 
 async function checkTicketAvailability(): Promise<void> {
+  if (!URL) {
+    console.error("URLが設定されていません。");
+    return;
+  }
   try {
     const response = await axios.get(URL, {
       headers: {
@@ -32,14 +39,39 @@ async function checkTicketAvailability(): Promise<void> {
     const $ = cheerio.load(response.data);
     const noTicketElement = $(".sl_ticketArchiveList--empty");
 
+    // アクセス集中ページのチェック
+    const isAccessCongested =
+      $("strong.notice:contains('ただいまアクセスが集中し')").length > 0 ||
+      $("p:contains('アクセスが集中')").length > 0 ||
+      $(".notice2").length > 0;
+
+    if (isAccessCongested) {
+      const currentTime = new Date().toLocaleString("ja-JP");
+      console.log(`[${currentTime}] IPアドレスを変えよう`);
+      return;
+    }
+
     if (!noTicketElement.length) {
       // チケットが見つかった場合
-      await client.pushMessage(LINE_USER_ID, {
-        type: "text",
-        text: `🎫 チケットが見つかりました！\nPlus Member ID: ${process.env
-          .PLUS_MEMBER_ID!}\n確認URL: ${URL}`,
-      });
-      console.log("チケットが見つかりました！通知を送信しました。");
+      try {
+        // Discord通知を送信
+        await sendDiscordMessage(
+          `🎫 チケットが見つかりました！\n確認URL: ${URL}`
+        );
+
+        if (PLUS_MEMBER_ID) {
+          await sendDiscordMessage(PLUS_MEMBER_ID);
+        }
+
+        console.log("チケットが見つかりました！Discord通知を送信しました。");
+        // インターバルをクリアしてループを終了
+        if (intervalId) {
+          clearInterval(intervalId);
+          console.log("チケット監視を終了します。");
+        }
+      } catch (error) {
+        console.error("Discord通知の送信に失敗しました:", error);
+      }
     } else {
       const currentTime = new Date().toLocaleString("ja-JP");
       console.log(`[${currentTime}] チケットはまだありません`);
@@ -55,5 +87,5 @@ async function checkTicketAvailability(): Promise<void> {
 }
 
 console.log("チケット監視を開始します...");
-setInterval(checkTicketAvailability, INTERVAL);
+const intervalId = setInterval(checkTicketAvailability, INTERVAL);
 checkTicketAvailability(); // 初回実行
